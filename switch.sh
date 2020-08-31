@@ -22,17 +22,10 @@ LND_CONTAINER_NAME="${LND_CONTAINER_NAME:-lnd}"    # Default Docker container na
 
 PREV_MATCH=
 
-switch_on_sync_done() {
-	# Node not pruned so lets do the switching
-	echo 'Checking if synced...'
-	if [ -f /statuses/node-status-bitcoind-ready ]; then
-		echo 'LND is already switched to bitcoind!'
-		return 1
-	fi
-
+disable_neutrino_if_synced() {
+	echo 'Checking if LND is backed by Neutrino...'
 	if ! grep -q 'bitcoin.node=neutrino' /lnd/lnd.conf; then
 		echo 'Neutrino mode has been disabled'
-		echo 'Switchback is not supported in this version'
 		return 1
 	fi
 
@@ -80,18 +73,13 @@ switch_on_sync_done() {
 	echo 'Bitcoind has been switched across to neutrino'
 	touch /statuses/node-status-bitcoind-ready
 	sed -Ei 's|(bitcoin.node)=neutrino|\1=bitcoind|g' /lnd/lnd.conf
-  
+
 	echo "Restarting LND"
 	docker stop  "$LND_CONTAINER_NAME"
 	docker start "$LND_CONTAINER_NAME"
 }
 
 while true; do
-	if ! switch_on_sync_done; then
-		echo 'Checking not necessary. Exiting.'
-		break
-	fi
-
-	# Run every every 1 hour by default or as per configurable
+	disable_neutrino_if_synced
 	sleep "$SLEEPTIME"
 done
